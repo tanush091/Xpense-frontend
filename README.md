@@ -187,6 +187,19 @@ npm run preview
 
 ---
 
+## ☁️ Deploy to Vercel
+
+1. Push this repository to GitHub.
+2. Go to [Vercel Dashboard](https://vercel.com/) and click **"Add New..."** → **"Project"**.
+3. Import the `Xpense-frontend` repository.
+4. Framework Preset will auto-detect as **Vite**.
+5. Under **Environment Variables**, add:
+   - `VITE_API_BASE_URL`: URL of your live Render backend (e.g. `https://xpense-backend.onrender.com/api`)
+6. Click **Deploy**.
+   - `vercel.json` ensures all client-side paths resolve properly without 404s.
+
+---
+
 ## 🤝 Contributing
 
 1. Fork the Project
