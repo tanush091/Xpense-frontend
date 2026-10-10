@@ -79,3 +79,8 @@ export function getBudgetHealth(balance, limit) {
   if (ratio >= 0.1) return { key: 'low', label: 'Running low', ratio };
   return { key: 'empty', label: 'Almost empty', ratio };
 }
+
+/** "2026-11-01" for a local date (toISOString would shift it to UTC). */
+export function toLocalISODate(d = new Date()) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}

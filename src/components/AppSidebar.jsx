@@ -1,5 +1,5 @@
 import React from 'react';
-import { House, Wallet, ArrowLeftRight, PiggyBank, BarChart3, QrCode, Settings, LogOut, ChevronDown } from 'lucide-react';
+import { House, Wallet, ArrowLeftRight, PiggyBank, BarChart3, QrCode, Settings, LogOut, ChevronDown, CalendarClock, Store } from 'lucide-react';
 import { getPersonaConfig } from '../data/personas';
 
 export const NAV_ICONS = {
@@ -9,10 +9,22 @@ export const NAV_ICONS = {
   goals: PiggyBank,
   analytics: BarChart3,
   payments: QrCode,
-  settings: Settings
+  settings: Settings,
+  bills: CalendarClock,
+  payees: Store
 };
 
 export const MAIN_NAV = ['dashboard', 'wallets', 'transactions', 'goals', 'analytics', 'payments'];
+
+/** Main menu for a persona: Bills sits after Budgets, Payees after Transactions. */
+export function mainNavFor(persona) {
+  const nav = [...MAIN_NAV];
+  (persona.extraNav || []).forEach((id) => {
+    const after = id === 'payees' ? 'transactions' : 'wallets';
+    nav.splice(nav.indexOf(after) + 1, 0, id);
+  });
+  return nav;
+}
 
 export function initialsOf(user) {
   const name = (user?.full_name || user?.name || user?.email || 'X').trim();
@@ -61,7 +73,7 @@ export default function AppSidebar({ activeTab, onTabChange, user, counts = {}, 
           <ChevronDown size={15} className="x-account-chevron" />
         </button>
 
-        <nav className="x-nav">{MAIN_NAV.map(renderItem)}</nav>
+        <nav className="x-nav">{mainNavFor(persona).map(renderItem)}</nav>
       </div>
 
       <div className="x-sidebar-bottom">

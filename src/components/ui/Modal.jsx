@@ -4,11 +4,14 @@ import { X } from 'lucide-react';
 /** Centered dialog on desktop, bottom sheet on phones (DESIGN §6). Esc and scrim close it. */
 export default function Modal({ open, title, description, onClose, children, footer, width = 480 }) {
   const panelRef = useRef(null);
+  // Keep the latest onClose without re-running the open effect (which moves focus) on every render
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
 
   useEffect(() => {
     if (!open) return undefined;
     const onKey = (e) => {
-      if (e.key === 'Escape') onClose?.();
+      if (e.key === 'Escape') onCloseRef.current?.();
     };
     document.addEventListener('keydown', onKey);
     const first = panelRef.current?.querySelector('input, select, textarea, button:not(.x-modal-close)');
@@ -19,7 +22,7 @@ export default function Modal({ open, title, description, onClose, children, foo
       document.removeEventListener('keydown', onKey);
       document.body.style.overflow = prevOverflow;
     };
-  }, [open, onClose]);
+  }, [open]);
 
   if (!open) return null;
 

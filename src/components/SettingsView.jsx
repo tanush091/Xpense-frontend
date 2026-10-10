@@ -6,7 +6,15 @@ import PageHeader from './ui/PageHeader';
 export default function SettingsView({ user, onUpdateProfile, onSignOut, notify }) {
   const persona = getPersonaConfig(user?.account_type);
   const isStudent = persona.id === 'student';
-  const [form, setForm] = useState({ full_name: '', university: '', semester: '', student_id: '' });
+  const isBusiness = persona.id === 'corporate';
+  const [form, setForm] = useState({
+    full_name: '',
+    university: '',
+    semester: '',
+    student_id: '',
+    business_name: '',
+    tax_reserve_percent: ''
+  });
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -14,7 +22,9 @@ export default function SettingsView({ user, onUpdateProfile, onSignOut, notify 
       full_name: user?.full_name || '',
       university: user?.university || '',
       semester: user?.semester || '',
-      student_id: user?.student_id && user.student_id !== user.email ? user.student_id : ''
+      student_id: user?.student_id && user.student_id !== user.email ? user.student_id : '',
+      business_name: user?.business_name || '',
+      tax_reserve_percent: user?.tax_reserve_percent ? String(Number(user.tax_reserve_percent)) : ''
     });
   }, [user]);
 
@@ -23,12 +33,19 @@ export default function SettingsView({ user, onUpdateProfile, onSignOut, notify 
   const save = async (e) => {
     e.preventDefault();
     if (!form.full_name.trim()) return notify('Your name cannot be empty.', 'error');
+    const tax = form.tax_reserve_percent === '' ? 0 : Number(form.tax_reserve_percent);
+    if (isBusiness && (Number.isNaN(tax) || tax < 0 || tax > 60)) {
+      return notify('Tax to set aside must be between 0% and 60%.', 'error');
+    }
     setSaving(true);
     try {
-      await onUpdateProfile({ ...form, full_name: form.full_name.trim() });
-      notify('Profile saved');
+      const updates = { full_name: form.full_name.trim() };
+      if (isStudent) Object.assign(updates, { university: form.university, semester: form.semester, student_id: form.student_id });
+      if (isBusiness) Object.assign(updates, { business_name: form.business_name, tax_reserve_percent: tax });
+      await onUpdateProfile(updates);
+      notify('Settings saved');
     } catch (err) {
-      notify(err.message || "Couldn't save your profile.", 'error');
+      notify(err.message || "Couldn't save your settings.", 'error');
     } finally {
       setSaving(false);
     }
@@ -72,6 +89,32 @@ export default function SettingsView({ user, onUpdateProfile, onSignOut, notify 
               </div>
             </>
           )}
+          {isBusiness && (
+            <>
+              <div className="x-field">
+                <label className="x-label" htmlFor="set-business">Business name</label>
+                <input id="set-business" className="x-input" placeholder="e.g. Nair Design Studio" value={form.business_name} onChange={set('business_name')} />
+              </div>
+              <div className="x-field">
+                <label className="x-label" htmlFor="set-tax">Tax to set aside (%)</label>
+                <input
+                  id="set-tax"
+                  type="number"
+                  min="0"
+                  max="60"
+                  step="0.5"
+                  className="x-input"
+                  placeholder="e.g. 18"
+                  value={form.tax_reserve_percent}
+                  onChange={set('tax_reserve_percent')}
+                  aria-describedby="set-tax-help"
+                />
+                <p id="set-tax-help" className="x-help">
+                  The share of money coming in that you keep aside for tax. Your Overview shows if you've set aside enough.
+                </p>
+              </div>
+            </>
+          )}
           <div className="x-field">
             <label className="x-label" htmlFor="set-currency">Currency</label>
             <input id="set-currency" className="x-input" value="Indian Rupee (₹)" readOnly />
@@ -81,7 +124,7 @@ export default function SettingsView({ user, onUpdateProfile, onSignOut, notify 
         <div className="x-form-actions">
           <button type="submit" className="x-btn x-btn-primary" disabled={saving}>
             {saving && <Loader2 size={16} className="x-spin" />}
-            Save profile
+            Save settings
           </button>
         </div>
       </form>
@@ -96,8 +139,8 @@ export default function SettingsView({ user, onUpdateProfile, onSignOut, notify 
           <div><dt>Account type</dt><dd>{persona.accountLabel}</dd></div>
         </dl>
         <p className="x-help">
-          Each account type has its own budgets and goals. To try a different type, use "Switch account" and create a new
-          profile.
+          Each account type has its own dashboard, budgets and goals. To try a different type, use "Switch account" and create a
+          new profile.
         </p>
       </section>
 

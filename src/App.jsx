@@ -4,14 +4,13 @@ import { useAuth } from './context/AuthContext';
 import { walletService } from './services/walletService';
 import { transactionService } from './services/transactionService';
 import { savingsGoalService } from './services/savingsGoalService';
-import { getPersonaConfig } from './data/personas';
-import { computeStudentSummary } from './lib/studentMetrics';
+import { billService } from './services/billService';
+import { getDashboard } from './dashboards';
 import { formatINR } from './lib/format';
 
 import AppSidebar from './components/AppSidebar';
 import AppTopbar from './components/AppTopbar';
 import MobileTabBar from './components/MobileTabBar';
-import DashboardView from './components/DashboardView';
 import TransactionsView from './components/TransactionsView';
 import WalletsView from './components/WalletsView';
 import GoalsView from './components/GoalsView';
@@ -30,7 +29,7 @@ const ACCOUNT_TYPES = [
   { value: 'Corporate SaaS', title: 'Business', text: 'Company spending, team budgets and reserves' }
 ];
 
-function AuthDialog({ open, mode, setMode, onClose, onSubmit }) {
+function AuthDialog({ open, mode, setMode, onClose, onSubmit, defaultAccountType }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
@@ -39,6 +38,9 @@ function AuthDialog({ open, mode, setMode, onClose, onSubmit }) {
   const [busy, setBusy] = useState(false);
 
   useEffect(() => setError(''), [mode, open]);
+  useEffect(() => {
+    if (open && defaultAccountType) setAccountType(defaultAccountType);
+  }, [open, defaultAccountType]);
 
   const submit = async (e, demo = false) => {
     e?.preventDefault();
@@ -145,6 +147,7 @@ export default function App() {
   const [wallets, setWallets] = useState([]);
   const [goals, setGoals] = useState([]);
   const [transactions, setTransactions] = useState([]);
+  const [extras, setExtras] = useState({}); // persona-only data: bills, monthly totals, payees
   const [dataLoading, setDataLoading] = useState(true);
 
   const [toast, setToast] = useState(null);
@@ -154,6 +157,7 @@ export default function App() {
   const [isAccountSwapperOpen, setIsAccountSwapperOpen] = useState(false);
   const [authMode, setAuthMode] = useState('login');
   const [isAuthOpen, setIsAuthOpen] = useState(false);
+  const [authAccountType, setAuthAccountType] = useState(null);
 
   // Show the boot screen only for the first session check, not during sign-in or account switches
   const [booted, setBooted] = useState(false);
@@ -168,28 +172,43 @@ export default function App() {
   }, []);
 
   const userId = user?.id;
+  // The signed-in account's type decides which dashboard, calculations and extra pages are used
+  const dashboard = useMemo(() => getDashboard(user?.account_type), [user?.account_type]);
+  const { persona, Home, extraPages } = dashboard;
+
   const loadData = useCallback(async () => {
     if (!userId) {
       setWallets([]);
       setGoals([]);
       setTransactions([]);
+      setExtras({});
       return;
     }
     try {
-      const [w, g, t] = await Promise.all([
+      const [w, g, t, x] = await Promise.all([
         walletService.getWallets(),
         savingsGoalService.getGoals(),
-        transactionService.getTransactions()
+        transactionService.getTransactions(),
+        dashboard.loadExtras().catch(() => {
+          notify("Some dashboard details couldn't load. Please refresh the page.", 'error');
+          return {};
+        })
       ]);
       setWallets(w || []);
       setGoals(g || []);
       setTransactions(t || []);
+      setExtras(x || {});
     } catch (err) {
       notify("We couldn't load your latest data. Please refresh the page.", 'error');
     } finally {
       setDataLoading(false);
     }
-  }, [userId, notify]);
+  }, [userId, dashboard, notify]);
+
+  // A different account starts on its own Home screen
+  useEffect(() => {
+    setActiveTab('dashboard');
+  }, [userId]);
 
   useEffect(() => {
     setDataLoading(true);
@@ -202,10 +221,9 @@ export default function App() {
   }, [loadData, refreshUser]);
 
   const summary = useMemo(
-    () => (user ? computeStudentSummary({ user, wallets, transactions, goals }) : null),
-    [user, wallets, transactions, goals]
+    () => (user ? dashboard.computeSummary({ user, wallets, transactions, goals, ...extras }) : null),
+    [dashboard, user, wallets, transactions, goals, extras]
   );
-  const persona = getPersonaConfig(user?.account_type);
 
   // ---- Money actions. They throw so each form can show the error next to the field. ----
   const recordTransaction = async (txData) => {
@@ -283,6 +301,62 @@ export default function App() {
     }
   };
 
+  const updateGoal = async (id, data) => {
+    try {
+      await savingsGoalService.updateGoal(id, data);
+      await refreshAll();
+      notify(data.is_emergency ? 'Set as your emergency fund' : 'Goal updated');
+    } catch (err) {
+      notify(err.message, 'error');
+    }
+  };
+
+  // ---- Personal: bills ----
+  const createBill = async (data) => {
+    await billService.createBill(data);
+    await refreshAll();
+    notify(`Bill "${data.name}" added`);
+  };
+
+  const updateBill = async (id, data) => {
+    await billService.updateBill(id, data);
+    await refreshAll();
+    notify('Bill updated');
+  };
+
+  const deleteBill = async (id) => {
+    try {
+      await billService.deleteBill(id);
+      await refreshAll();
+      notify('Bill removed');
+    } catch (err) {
+      notify(err.message, 'error');
+    }
+  };
+
+  /** Throws so the confirm dialog can show the reason; the Home button shows it as a message. */
+  const payBill = async (bill) => {
+    await billService.payBill(bill.id);
+    await refreshAll();
+    notify(`${bill.name} paid — ${formatINR(bill.amount)}`);
+  };
+
+  // ---- Business: move money into the tax budget ----
+  const moveToTax = async (wallet, amount) => {
+    try {
+      await walletService.topUpWallet(wallet.id, amount, { fromAvailable: true });
+      await refreshAll();
+      notify(`${formatINR(amount)} moved to ${wallet.name}`);
+    } catch (err) {
+      notify(err.message, 'error');
+    }
+  };
+
+  const saveProfile = async (updates) => {
+    await updateProfile(updates);
+    await refreshAll();
+  };
+
   const handleAuth = async ({ mode, email, password, name, accountType }) => {
     if (mode === 'login') await signIn(email, password);
     else await signUp(email, password, name, accountType);
@@ -311,12 +385,20 @@ export default function App() {
       <div className="landing-layout-wrapper">
         {toastEl}
         <LandingPageView
-          onOpenAuth={(mode) => {
+          onOpenAuth={(mode, accountType) => {
             setAuthMode(mode || 'login');
+            setAuthAccountType(accountType || null);
             setIsAuthOpen(true);
           }}
         />
-        <AuthDialog open={isAuthOpen} mode={authMode} setMode={setAuthMode} onClose={() => setIsAuthOpen(false)} onSubmit={handleAuth} />
+        <AuthDialog
+          open={isAuthOpen}
+          mode={authMode}
+          setMode={setAuthMode}
+          defaultAccountType={authAccountType}
+          onClose={() => setIsAuthOpen(false)}
+          onSubmit={handleAuth}
+        />
       </div>
     );
   }
@@ -327,6 +409,30 @@ export default function App() {
   };
   const openExpense = () => setTxModalMode('expense');
   const openMoneyIn = () => setTxModalMode('income');
+
+  // Everything a Home screen can do, in one place
+  const actions = {
+    navigate: goTo,
+    addExpense: openExpense,
+    addMoneyIn: openMoneyIn,
+    addMoneyToBudget: setBudgetToFill,
+    payBill: async (bill) => {
+      try {
+        await payBill(bill);
+      } catch (err) {
+        notify(err.message, 'error');
+      }
+    },
+    payBillOrThrow: payBill,
+    moveToTax,
+    runStep: (step) => {
+      if (step === 'moneyIn') openMoneyIn();
+      else if (step === 'expense') openExpense();
+      else if (step === 'budgets') goTo('wallets');
+      else goTo(step);
+    }
+  };
+  const ExtraPage = extraPages[activeTab];
 
   return (
     <div className="x-app">
@@ -358,14 +464,17 @@ export default function App() {
           ) : (
             <>
               {activeTab === 'dashboard' && (
-                <DashboardView
-                  user={user}
+                <Home user={user} summary={summary} transactions={transactions} wallets={wallets} extras={extras} actions={actions} />
+              )}
+              {ExtraPage && (
+                <ExtraPage
                   summary={summary}
-                  transactions={transactions}
-                  onNavigate={goTo}
-                  onAddExpense={openExpense}
-                  onAddMoneyIn={openMoneyIn}
-                  onAddMoneyToBudget={setBudgetToFill}
+                  wallets={wallets}
+                  notify={notify}
+                  onCreateBill={createBill}
+                  onUpdateBill={updateBill}
+                  onDeleteBill={deleteBill}
+                  onPayBill={payBill}
                 />
               )}
               {activeTab === 'wallets' && (
@@ -380,7 +489,7 @@ export default function App() {
                 />
               )}
               {activeTab === 'transactions' && (
-                <TransactionsView transactions={transactions} onDeleteTransaction={deleteTransaction} onAddExpense={openExpense} notify={notify} />
+                <TransactionsView title={persona.labels.transactions} transactions={transactions} onDeleteTransaction={deleteTransaction} onAddExpense={openExpense} notify={notify} />
               )}
               {activeTab === 'goals' && (
                 <GoalsView
@@ -388,13 +497,14 @@ export default function App() {
                   goals={goals}
                   summary={summary}
                   onCreateGoal={createGoal}
+                  onUpdateGoal={updateGoal}
                   onContributeGoal={contributeGoal}
                   onDeleteGoal={deleteGoal}
                 />
               )}
-              {activeTab === 'analytics' && <AnalyticsView summary={summary} notify={notify} />}
+              {activeTab === 'analytics' && <AnalyticsView title={persona.labels.analytics} summary={summary} notify={notify} />}
               {activeTab === 'payments' && <PaymentsView user={user} wallets={wallets} onRecord={recordTransaction} notify={notify} />}
-              {activeTab === 'settings' && <SettingsView user={user} onUpdateProfile={updateProfile} onSignOut={signOut} notify={notify} />}
+              {activeTab === 'settings' && <SettingsView user={user} onUpdateProfile={saveProfile} onSignOut={signOut} notify={notify} />}
             </>
           )}
         </main>
@@ -414,6 +524,8 @@ export default function App() {
         onClose={() => setTxModalMode(null)}
         wallets={wallets}
         incomeExamples={persona.copy.moneyInExamples}
+        expenseQuick={persona.copy.expenseQuick}
+        incomeQuick={persona.copy.incomeQuick}
         onSubmit={recordTransaction}
       />
 

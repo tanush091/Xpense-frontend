@@ -12,11 +12,12 @@ import EmptyState from './ui/EmptyState';
 
 const HEALTH_TONE = { good: 'brand', low: 'warn', empty: 'danger', unfunded: 'brand' };
 
-function BudgetForm({ initial, categories, presets, notInBudget, onCancel, onSave, isNew }) {
+function BudgetForm({ initial, categories, presets, notInBudget, onCancel, onSave, isNew, showTaxToggle }) {
   const [name, setName] = useState(initial?.name || '');
   const [category, setCategory] = useState(initial?.category || categories[0]);
   const [limit, setLimit] = useState(initial ? String(Math.round(toNumber(initial.budget_limit))) : '');
   const [startWith, setStartWith] = useState('');
+  const [isTax, setIsTax] = useState(Boolean(initial?.is_tax_reserve));
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
 
@@ -30,7 +31,10 @@ function BudgetForm({ initial, categories, presets, notInBudget, onCancel, onSav
     }
     setSaving(true);
     try {
-      await onSave({ name: name.trim(), category, budget_limit: toNumber(limit) }, toNumber(startWith));
+      await onSave(
+        { name: name.trim(), category, budget_limit: toNumber(limit), ...(showTaxToggle ? { is_tax_reserve: isTax } : {}) },
+        toNumber(startWith)
+      );
     } catch (err) {
       setError(err.message || 'Something went wrong. Please try again.');
       setSaving(false);
@@ -104,6 +108,16 @@ function BudgetForm({ initial, categories, presets, notInBudget, onCancel, onSav
         />
       )}
 
+      {showTaxToggle && (
+        <label className="x-check">
+          <input type="checkbox" checked={isTax} onChange={(e) => setIsTax(e.target.checked)} />
+          <span>
+            <span className="x-radio-title">This is my tax budget</span>
+            <span className="x-radio-sub">Money set aside for tax is tracked on your Overview.</span>
+          </span>
+        </label>
+      )}
+
       {error && <p className="x-error x-form-error" role="alert">{error}</p>}
 
       <div className="x-form-actions">
@@ -138,8 +152,8 @@ export default function WalletsView({
   return (
     <div className="x-page">
       <PageHeader
-        title="Budgets"
-        subtitle="Split your money into budgets so you always know what's left for food, travel, books and fun."
+        title={persona.labels.wallets}
+        subtitle={persona.copy.budgetsSubtitle}
         actions={
           <button type="button" className="x-btn x-btn-secondary" onClick={() => setCreating(true)}>
             <Plus size={16} /> New budget
@@ -199,7 +213,10 @@ export default function WalletsView({
                     <CategoryIcon category={b.category} name={b.name} />
                     <div>
                       <h3 className="x-h3">{b.name}</h3>
-                      <span className="x-small x-muted">{b.category}</span>
+                      <span className="x-small x-muted">
+                        {b.category}
+                        {b.is_tax_reserve && <span className="x-tag">Tax budget</span>}
+                      </span>
                     </div>
                   </div>
                   <div className="x-inline x-gap-0">
@@ -239,8 +256,11 @@ export default function WalletsView({
         {creating && (
           <BudgetForm
             isNew
+            showTaxToggle={persona.id === 'corporate'}
             categories={categories}
-            presets={persona.defaultWallets}
+            presets={[...persona.defaultWallets, ...(persona.copy.budgetIdeas || [])].filter(
+              (p) => !budgets.some((b) => b.name.toLowerCase() === p.name.toLowerCase())
+            )}
             notInBudget={notInBudget}
             onCancel={() => setCreating(false)}
             onSave={async (data, startWith) => {
@@ -255,6 +275,7 @@ export default function WalletsView({
         {editing && (
           <BudgetForm
             initial={editing}
+            showTaxToggle={persona.id === 'corporate'}
             categories={categories.includes(editing.category) ? categories : [editing.category, ...categories]}
             presets={[]}
             notInBudget={notInBudget}

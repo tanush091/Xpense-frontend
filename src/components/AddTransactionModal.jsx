@@ -19,6 +19,8 @@ export default function AddTransactionModal({
   wallets = [],
   defaultWalletId,
   incomeExamples = [],
+  expenseQuick = [50, 100, 200, 500],
+  incomeQuick = [1000, 2000, 5000, 10000],
   onSubmit
 }) {
   const isExpense = mode === 'expense';
@@ -89,7 +91,7 @@ export default function AddTransactionModal({
           label="How much?"
           value={amount}
           onChange={setAmount}
-          quick={isExpense ? [50, 100, 200, 500] : [1000, 2000, 5000, 10000]}
+          quick={isExpense ? expenseQuick : incomeQuick}
           error={tooMuch ? `More than the ${formatINR(wallet.balance)} left in ${wallet.name}.` : ''}
           autoFocus
         />

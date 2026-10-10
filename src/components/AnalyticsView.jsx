@@ -7,7 +7,7 @@ import EmptyState from './ui/EmptyState';
 
 const BAR_TONES = ['c1', 'c2', 'c3', 'c4', 'c5', 'c6'];
 
-export default function AnalyticsView({ summary, notify }) {
+export default function AnalyticsView({ title = 'Insights', summary, notify }) {
   const [exporting, setExporting] = useState(false);
   if (!summary) return null;
   const s = summary;
@@ -31,7 +31,7 @@ export default function AnalyticsView({ summary, notify }) {
   return (
     <div className="x-page">
       <PageHeader
-        title="Insights"
+        title={title}
         subtitle={`Where your money went in ${monthName}, and how it compares with last month.`}
         actions={
           <button type="button" className="x-btn x-btn-secondary" onClick={download} disabled={exporting}>

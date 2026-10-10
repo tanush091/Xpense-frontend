@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Plus, Trash2, PiggyBank, Check, Loader2 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { getPersonaConfig } from '../data/personas';
-import { formatINR, formatLongDate, toNumber } from '../lib/format';
+import { formatINR, formatLongDate, toNumber, toLocalISODate } from '../lib/format';
 import PageHeader from './ui/PageHeader';
 import Modal from './ui/Modal';
 import AmountField from './ui/AmountField';
@@ -31,11 +31,12 @@ function celebrate() {
 function defaultDate() {
   const d = new Date();
   d.setMonth(d.getMonth() + 6);
-  return d.toISOString().slice(0, 10);
+  return toLocalISODate(d);
 }
 
-export default function GoalsView({ user, goals = [], summary, onCreateGoal, onContributeGoal, onDeleteGoal }) {
+export default function GoalsView({ user, goals = [], summary, onCreateGoal, onUpdateGoal, onContributeGoal, onDeleteGoal }) {
   const persona = getPersonaConfig(user?.account_type);
+  const isPersonal = persona.id === 'personal';
   const notInBudget = summary?.notInBudget || 0;
 
   const [creating, setCreating] = useState(false);
@@ -43,6 +44,7 @@ export default function GoalsView({ user, goals = [], summary, onCreateGoal, onC
   const [target, setTarget] = useState('');
   const [date, setDate] = useState(defaultDate());
   const [formError, setFormError] = useState('');
+  const [isEmergency, setIsEmergency] = useState(false);
   const [saving, setSaving] = useState(false);
 
   const [depositGoal, setDepositGoal] = useState(null);
@@ -55,6 +57,7 @@ export default function GoalsView({ user, goals = [], summary, onCreateGoal, onC
 
   const openCreate = (idea) => {
     setTitle(idea?.title || '');
+    setIsEmergency(isPersonal && /emergency/i.test(idea?.title || '') && !goals.some((g) => g.is_emergency));
     setTarget(idea ? String(idea.target) : '');
     setDate(defaultDate());
     setFormError('');
@@ -68,7 +71,13 @@ export default function GoalsView({ user, goals = [], summary, onCreateGoal, onC
     if (toNumber(target) <= 0) return setFormError('Set how much you want to save.');
     setSaving(true);
     try {
-      await onCreateGoal({ title: title.trim(), target_amount: toNumber(target), target_date: date, category: 'Savings' });
+      await onCreateGoal({
+        title: title.trim(),
+        target_amount: toNumber(target),
+        target_date: date,
+        category: 'Savings',
+        ...(isPersonal ? { is_emergency: isEmergency } : {})
+      });
       setCreating(false);
     } catch (err) {
       setFormError(err.message || 'Something went wrong. Please try again.');
@@ -114,8 +123,8 @@ export default function GoalsView({ user, goals = [], summary, onCreateGoal, onC
   return (
     <div className="x-page">
       <PageHeader
-        title="Savings"
-        subtitle="Set money aside for things that matter, like a trip, a laptop or an emergency."
+        title={persona.copy.goalsTitle || 'Savings'}
+        subtitle={persona.copy.goalsSubtitle}
         actions={
           <button type="button" className="x-btn x-btn-secondary" onClick={() => openCreate()}>
             <Plus size={16} /> New goal
@@ -176,6 +185,7 @@ export default function GoalsView({ user, goals = [], summary, onCreateGoal, onC
                         </h3>
                         <span className="x-small x-muted">
                           {goal.target_date ? `By ${formatLongDate(goal.target_date)}` : 'No deadline'}
+                          {goal.is_emergency && <span className="x-tag">Emergency fund</span>}
                         </span>
                       </div>
                     </div>
@@ -200,6 +210,11 @@ export default function GoalsView({ user, goals = [], summary, onCreateGoal, onC
                     </span>
                   </div>
 
+                  {isPersonal && !goal.is_emergency && onUpdateGoal && (
+                    <button type="button" className="x-link x-small x-self-start" onClick={() => onUpdateGoal(goal.id, { is_emergency: true })}>
+                      Make this my emergency fund
+                    </button>
+                  )}
                   {!done && (
                     <button type="button" className="x-btn x-btn-secondary x-btn-block" onClick={() => openDeposit(goal)}>
                       <Plus size={16} /> Add savings
@@ -246,6 +261,15 @@ export default function GoalsView({ user, goals = [], summary, onCreateGoal, onC
             <label className="x-label" htmlFor="goal-date">When do you need it by?</label>
             <input id="goal-date" type="date" className="x-input" value={date} onChange={(e) => setDate(e.target.value)} />
           </div>
+          {isPersonal && (
+            <label className="x-check">
+              <input type="checkbox" checked={isEmergency} onChange={(e) => setIsEmergency(e.target.checked)} />
+              <span>
+                <span className="x-radio-title">This is my emergency fund</span>
+                <span className="x-radio-sub">Your Home screen shows how many months of spending it covers.</span>
+              </span>
+            </label>
+          )}
           {formError && <p className="x-error x-form-error" role="alert">{formError}</p>}
           <div className="x-form-actions">
             <button type="button" className="x-btn x-btn-ghost" onClick={() => setCreating(false)}>Cancel</button>

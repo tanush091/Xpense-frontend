@@ -79,9 +79,9 @@ export function AuthProvider({ children }) {
     try {
       const switched = await authService.switchAccount(email);
       setUser(switched);
-      refreshSavedAccounts();
       return switched;
     } finally {
+      refreshSavedAccounts();
       setLoading(false);
     }
   };

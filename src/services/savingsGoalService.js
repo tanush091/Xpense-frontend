@@ -75,6 +75,7 @@ export const savingsGoalService = {
       targetDate: goalData.target_date || goalData.targetDate || null,
       icon: goalData.icon || 'Target',
       category: goalData.category || 'Savings',
+      is_emergency: Boolean(goalData.is_emergency),
       status: 'in_progress',
       userId: goalData.user_id || goalData.userId,
       user_id: goalData.user_id || goalData.userId

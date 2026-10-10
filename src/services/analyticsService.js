@@ -27,6 +27,18 @@ export const analyticsService = {
     return [];
   },
 
+  /** Money in and money out for each of the last `months` months (Business dashboard). */
+  async getMonthlyTotals(months = 6) {
+    const data = await apiClient.get('/analytics/monthly', { months });
+    return Array.isArray(data) ? data : [];
+  },
+
+  /** Biggest payees between two dates (yyyy-mm-dd); defaults to this month on the server. */
+  async getTopPayees({ from, to, limit = 5 } = {}) {
+    const data = await apiClient.get('/analytics/payees', { from, to, limit });
+    return Array.isArray(data) ? data : [];
+  },
+
   /**
    * Computes comprehensive analytics from a list of transactions and wallets
    */

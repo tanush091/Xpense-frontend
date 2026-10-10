@@ -2,15 +2,16 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Store, QrCode, Send, Copy, Check, Info, Loader2, ArrowRight } from 'lucide-react';
 import QRCode from 'qrcode';
 import { MERCHANTS, RECIPIENTS } from '../data/demo';
+import { getPersonaConfig } from '../data/personas';
 import { formatINR, toNumber } from '../lib/format';
 import PageHeader from './ui/PageHeader';
 import AmountField from './ui/AmountField';
 import CategoryIcon from './ui/CategoryIcon';
 
 const TABS = [
-  { id: 'pay', label: 'Pay a shop', icon: Store },
-  { id: 'receive', label: 'Receive money', icon: QrCode },
-  { id: 'send', label: 'Send to a friend', icon: Send }
+  { id: 'pay', label: 'Pay a shop', short: 'Pay', icon: Store },
+  { id: 'receive', label: 'Receive money', short: 'Receive', icon: QrCode },
+  { id: 'send', label: 'Send to a friend', short: 'Send', icon: Send }
 ];
 
 function BudgetPicker({ wallets, value, onChange }) {
@@ -74,8 +75,8 @@ function usePayment(wallets, onRecord, notify) {
   return { amount, setAmount, walletId, setWalletId, wallet, num, error, setError, busy, validate, submit };
 }
 
-function PayShop({ wallets, onRecord, notify }) {
-  const [merchant, setMerchant] = useState(MERCHANTS[0]);
+function PayShop({ wallets, onRecord, notify, shops = MERCHANTS, shopWord = 'shop', quick = [50, 100, 200] }) {
+  const [merchant, setMerchant] = useState(shops[0]);
   const [reviewing, setReviewing] = useState(false);
   const p = usePayment(wallets, onRecord, notify);
 
@@ -131,9 +132,9 @@ function PayShop({ wallets, onRecord, notify }) {
   return (
     <form onSubmit={review} noValidate>
       <fieldset className="x-field">
-        <legend className="x-label">Which shop?</legend>
+        <legend className="x-label">Which {shopWord}?</legend>
         <div className="x-chips">
-          {MERCHANTS.map((m) => (
+          {shops.map((m) => (
             <button key={m.id} type="button" className={`x-chip ${merchant.id === m.id ? 'is-active' : ''}`} onClick={() => setMerchant(m)}>
               {m.name}
             </button>
@@ -141,7 +142,7 @@ function PayShop({ wallets, onRecord, notify }) {
         </div>
         <p className="x-help">{merchant.location}</p>
       </fieldset>
-      <AmountField id="pay-amount" label="How much?" value={p.amount} onChange={p.setAmount} quick={[50, 100, 200]} />
+      <AmountField id="pay-amount" label="How much?" value={p.amount} onChange={p.setAmount} quick={quick} />
       <fieldset className="x-field">
         <legend className="x-label">Pay from which budget?</legend>
         <BudgetPicker wallets={wallets} value={p.walletId} onChange={p.setWalletId} />
@@ -154,7 +155,7 @@ function PayShop({ wallets, onRecord, notify }) {
   );
 }
 
-function SendFriend({ wallets, onRecord, notify }) {
+function SendFriend({ wallets, onRecord, notify, quick = [100, 250, 500] }) {
   const [friend, setFriend] = useState(RECIPIENTS[0]);
   const p = usePayment(wallets, onRecord, notify);
 
@@ -181,7 +182,7 @@ function SendFriend({ wallets, onRecord, notify }) {
           ))}
         </div>
       </fieldset>
-      <AmountField id="send-amount" label="How much?" value={p.amount} onChange={p.setAmount} quick={[100, 250, 500]} />
+      <AmountField id="send-amount" label="How much?" value={p.amount} onChange={p.setAmount} quick={quick} />
       <fieldset className="x-field">
         <legend className="x-label">Send from which budget?</legend>
         <BudgetPicker wallets={wallets} value={p.walletId} onChange={p.setWalletId} />
@@ -271,10 +272,19 @@ function ReceiveMoney({ user, onRecord, notify }) {
 
 export default function PaymentsView({ user, wallets = [], onRecord, notify }) {
   const [tab, setTab] = useState('pay');
+  const persona = getPersonaConfig(user?.account_type);
+  const isBusiness = persona.id === 'corporate';
+  const shopWord = isBusiness ? 'supplier' : 'shop';
+  const tabs = TABS.map((t) =>
+    t.id === 'pay' ? { ...t, label: `Pay a ${shopWord}` } : t.id === 'send' && isBusiness ? { ...t, label: 'Send to a person' } : t
+  );
 
   return (
     <div className="x-page">
-      <PageHeader title="Pay & receive" subtitle="Pay a shop, collect money with a QR code, or send money to a friend." />
+      <PageHeader
+        title={persona.labels.payments}
+        subtitle={`Pay a ${shopWord}, collect money with a QR code, or send money to ${isBusiness ? 'someone' : 'a friend'}.`}
+      />
 
       <div className="x-notice">
         <Info size={17} />
@@ -284,18 +294,27 @@ export default function PaymentsView({ user, wallets = [], onRecord, notify }) {
       </div>
 
       <div className="x-segmented x-segmented-lg" role="tablist" aria-label="Payment type">
-        {TABS.map(({ id, label, icon: Icon }) => (
-          <button key={id} type="button" role="tab" aria-selected={tab === id} className={`x-seg ${tab === id ? 'is-active' : ''}`} onClick={() => setTab(id)}>
-            <Icon size={16} />
-            <span>{label}</span>
+        {tabs.map(({ id, label, short, icon: Icon }) => (
+          <button
+            key={id}
+            type="button"
+            role="tab"
+            aria-selected={tab === id}
+            aria-label={label}
+            className={`x-seg ${tab === id ? 'is-active' : ''}`}
+            onClick={() => setTab(id)}
+          >
+            <Icon size={16} aria-hidden="true" />
+            <span className="x-seg-long">{label}</span>
+            <span className="x-seg-short">{short}</span>
           </button>
         ))}
       </div>
 
       <section className="x-card x-pay-card">
-        {tab === 'pay' && <PayShop wallets={wallets} onRecord={onRecord} notify={notify} />}
+        {tab === 'pay' && <PayShop wallets={wallets} onRecord={onRecord} notify={notify} shops={persona.copy.shops} shopWord={shopWord} quick={persona.copy.expenseQuick.slice(0, 3)} />}
         {tab === 'receive' && <ReceiveMoney user={user} onRecord={onRecord} notify={notify} />}
-        {tab === 'send' && <SendFriend wallets={wallets} onRecord={onRecord} notify={notify} />}
+        {tab === 'send' && <SendFriend wallets={wallets} onRecord={onRecord} notify={notify} quick={persona.copy.expenseQuick.slice(1, 4)} />}
       </section>
     </div>
   );

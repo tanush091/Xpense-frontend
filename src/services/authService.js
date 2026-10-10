@@ -165,6 +165,10 @@ export const authService = {
   },
 
   async signOut() {
+    // Sign out of every account on this device: keep the list for convenience, but forget all saved
+    // logins so no account can be reopened without its password
+    const accounts = getSavedAccounts().map((a) => ({ ...a, token: null }));
+    localStorage.setItem(SAVED_ACCOUNTS_KEY, JSON.stringify(accounts));
     apiClient.setToken(null);
     localStorage.removeItem(LOCAL_STORAGE_USER_KEY);
     // Also clear cached user-specific data to prevent leakage between accounts
@@ -174,29 +178,42 @@ export const authService = {
     return true;
   },
 
+  /**
+   * Switches to another account saved on this device. The saved login is checked quietly first;
+   * if it has expired, the current session is left untouched and the user is asked to sign in.
+   */
   async switchAccount(email) {
-    const accounts = getSavedAccounts();
-    const target = accounts.find(a => a.email.toLowerCase() === email.toLowerCase());
-    if (!target) throw new Error('Account not found in saved list.');
-    if (target.token) {
-      apiClient.setToken(target.token);
+    const target = getSavedAccounts().find((a) => a.email.toLowerCase() === email.toLowerCase());
+    const needsPassword = () => {
+      const err = new Error('Please sign in to this account again.');
+      err.needsPassword = true;
+      return err;
+    };
+    if (!target) throw new Error('This account is no longer on this device.');
+    if (!target.token) throw needsPassword();
+
+    let profile = null;
+    try {
+      const res = await fetch(`${apiClient.baseUrl}/auth/me`, { headers: { Authorization: `Bearer ${target.token}` } });
+      const json = res.ok ? await res.json() : null;
+      profile = json?.data || null;
+    } catch {
+      profile = null;
     }
-    // Clear user cached items so clean data loads for this profile
+    if (!profile || profile.email?.toLowerCase() !== target.email.toLowerCase()) {
+      // Forget the stale login; keep the account listed so the user can sign in again
+      const accounts = getSavedAccounts().map((a) => (a.email.toLowerCase() === target.email.toLowerCase() ? { ...a, token: null } : a));
+      localStorage.setItem(SAVED_ACCOUNTS_KEY, JSON.stringify(accounts));
+      throw needsPassword();
+    }
+
+    apiClient.setToken(target.token);
     localStorage.removeItem('xpense_wallets');
     localStorage.removeItem('xpense_transactions');
     localStorage.removeItem('xpense_savings_goals');
-
-    try {
-      const freshUser = await this.getCurrentUser();
-      if (freshUser) {
-        saveAccountToStorage(freshUser, target.token);
-        return freshUser;
-      }
-    } catch (e) {
-      console.warn('Could not fetch fresh user on switch, using cached profile', e);
-    }
-    const user = normalizeUser(target);
+    const user = normalizeUser(profile);
     localStorage.setItem(LOCAL_STORAGE_USER_KEY, JSON.stringify(user));
+    saveAccountToStorage(user, target.token);
     return user;
   },
 

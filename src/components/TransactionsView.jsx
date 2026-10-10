@@ -13,7 +13,7 @@ const FILTERS = [
   { id: 'income', label: 'Money in' }
 ];
 
-export default function TransactionsView({ transactions = [], onDeleteTransaction, onAddExpense, notify }) {
+export default function TransactionsView({ title = 'Activity', transactions = [], onDeleteTransaction, onAddExpense, notify }) {
   const [query, setQuery] = useState('');
   const [type, setType] = useState('all');
   const [category, setCategory] = useState('all');
@@ -75,7 +75,7 @@ export default function TransactionsView({ transactions = [], onDeleteTransactio
   return (
     <div className="x-page">
       <PageHeader
-        title="Activity"
+        title={title}
         subtitle="Every rupee in and out, newest first. Tap an item to see details."
         actions={
           <button type="button" className="x-btn x-btn-secondary" onClick={download} disabled={exporting}>
@@ -185,7 +185,7 @@ export default function TransactionsView({ transactions = [], onDeleteTransactio
             <div className="x-detail-amount">
               <span className={selected.type === 'income' ? 'x-text-brand' : ''}>
                 {selected.type === 'income' ? '+' : '−'}
-                {formatINR(selected.amount, { paise: 'always' })}
+                {formatINR(selected.amount)}
               </span>
             </div>
             <dl className="x-detail">
@@ -194,7 +194,7 @@ export default function TransactionsView({ transactions = [], onDeleteTransactio
               <div><dt>Category</dt><dd>{selected.category || '—'}</dd></div>
               <div><dt>Paid with</dt><dd>{selected.payment_method || '—'}</dd></div>
               {(selected.merchant || selected.recipient) && (
-                <div><dt>{selected.merchant ? 'Shop' : 'Person'}</dt><dd>{selected.merchant || selected.recipient}</dd></div>
+                <div><dt>{selected.merchant ? 'Paid to' : 'Sent to'}</dt><dd>{selected.merchant || selected.recipient}</dd></div>
               )}
               <div><dt>Date</dt><dd>{formatLongDate(txDate(selected))}, {formatTime(txDate(selected))}</dd></div>
               {selected.note && <div><dt>Note</dt><dd>{selected.note}</dd></div>}
@@ -205,7 +205,9 @@ export default function TransactionsView({ transactions = [], onDeleteTransactio
                 <p>
                   Delete this {selected.type === 'income' ? 'money in' : 'expense'}?{' '}
                   {selected.type === 'income'
-                    ? `${formatINR(selected.amount)} will be taken off your balance.`
+                    ? selected.wallet_id
+                      ? `${formatINR(selected.amount)} will be taken back out of ${selected.wallet_name || 'that budget'}.`
+                      : `${formatINR(selected.amount)} will be taken off your balance.`
                     : `${formatINR(selected.amount)} goes back into ${selected.wallet_name || 'your balance'}.`}
                 </p>
                 <div className="x-form-actions">

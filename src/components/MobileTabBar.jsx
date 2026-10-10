@@ -9,8 +9,10 @@ const MORE = ['analytics', 'payments', 'settings'];
 /** Bottom tab bar for phones (< 768px), five items max (DESIGN §4). */
 export default function MobileTabBar({ activeTab, onTabChange, user, onLogout, onOpenAccountSwapper }) {
   const [moreOpen, setMoreOpen] = useState(false);
-  const labels = getPersonaConfig(user?.account_type).labels;
-  const moreActive = MORE.includes(activeTab);
+  const persona = getPersonaConfig(user?.account_type);
+  const labels = persona.labels;
+  const more = [...(persona.extraNav || []), ...MORE];
+  const moreActive = more.includes(activeTab);
 
   const go = (id) => {
     setMoreOpen(false);
@@ -22,7 +24,7 @@ export default function MobileTabBar({ activeTab, onTabChange, user, onLogout, o
       {moreOpen && (
         <div className="x-scrim x-more-scrim" onClick={() => setMoreOpen(false)}>
           <div className="x-more-sheet" onClick={(e) => e.stopPropagation()} role="menu">
-            {MORE.map((id) => {
+            {more.map((id) => {
               const Icon = NAV_ICONS[id];
               return (
                 <button key={id} type="button" className="x-more-item" onClick={() => go(id)} role="menuitem">
