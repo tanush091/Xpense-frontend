@@ -11,7 +11,7 @@ export const reportService = {
     if (to) params.append('to', to);
     params.append('format', 'csv');
 
-    const baseUrl = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080/api').replace(/\/+$/, '');
+    const baseUrl = (import.meta.env.VITE_API_BASE_URL || 'https://xpense-backend-7ytd.onrender.com/api').replace(/\/+$/, '');
     const url = `${baseUrl}/reports?${params.toString()}`;
 
     const headers = {
